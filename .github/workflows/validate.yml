@@ -17,6 +17,10 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+          # Brand assets (icon/logo) live in home-assistant/brands and are
+          # only required for inclusion in the default HACS list. Drop this
+          # ignore once a brand PR is merged for domain "hermes".
+          ignore: brands
 
   hassfest:
     name: Hassfest

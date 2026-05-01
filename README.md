@@ -51,7 +51,7 @@ Copy `custom_components/hermes/` into `<HA config>/custom_components/hermes/` an
 
 | Field | Default | Notes |
 |---|---|---|
-| Bridge URL | `http://192.168.86.83:8645` | Use the IP of the machine running the bridge |
+| Bridge URL | `http://192.168.1.100:8645` | Replace with the IP of the machine running the bridge |
 | Model | `hermes-agent` | Sent in the OpenAI request body |
 | Timeout (s) | `60` | Raise to 90+ if Hermes runs heavy tool chains |
 | System prompt | (default supplied) | Editable later via the integration's options |

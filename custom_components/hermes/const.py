@@ -9,7 +9,7 @@ CONF_TIMEOUT = "timeout"
 CONF_MODEL = "model"
 CONF_SYSTEM_PROMPT = "system_prompt"
 
-DEFAULT_URL = "http://192.168.86.83:8645"
+DEFAULT_URL = "http://192.168.1.100:8645"
 DEFAULT_TIMEOUT = 60
 DEFAULT_MODEL = "hermes-agent"
 DEFAULT_SYSTEM_PROMPT = (

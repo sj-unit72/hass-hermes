@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from typing import Any, Literal
 
 import aiohttp
@@ -14,16 +15,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import ulid as ulid_util
 
 from .const import (
     CHAT_COMPLETIONS_PATH,
-    CONF_API_KEY,
     CONF_MODEL,
+    CONF_SYSTEM_PROMPT,
     CONF_TIMEOUT,
     CONF_URL,
     DEFAULT_MODEL,
+    DEFAULT_SYSTEM_PROMPT,
     DEFAULT_TIMEOUT,
-    DOMAIN,
+    MAX_HISTORY_EXCHANGES,
+    MAX_TRACKED_CONVERSATIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,7 +43,7 @@ async def async_setup_entry(
 
 
 class HermesConversationEntity(conversation.ConversationEntity):
-    """Forwards user utterances to the local Hermes bridge."""
+    """Forwards user utterances to the local Hermes bridge with history."""
 
     _attr_has_entity_name = True
     _attr_name = "Hermes"
@@ -47,37 +51,56 @@ class HermesConversationEntity(conversation.ConversationEntity):
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
         self._attr_unique_id = entry.entry_id
+        self._history: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
 
     @property
     def supported_languages(self) -> list[str] | Literal["*"]:
         return MATCH_ALL
 
     async def async_added_to_hass(self) -> None:
-        """Register this entity as a conversation agent."""
         await super().async_added_to_hass()
         conversation.async_set_agent(self.hass, self._entry, self)
 
     async def async_will_remove_from_hass(self) -> None:
-        """Unregister on removal."""
         conversation.async_unset_agent(self.hass, self._entry)
         await super().async_will_remove_from_hass()
+
+    def _get_history(self, conversation_id: str) -> list[dict[str, str]]:
+        """LRU-cached per-conversation message history (no system prompt)."""
+        if conversation_id in self._history:
+            self._history.move_to_end(conversation_id)
+            return self._history[conversation_id]
+        history: list[dict[str, str]] = []
+        self._history[conversation_id] = history
+        while len(self._history) > MAX_TRACKED_CONVERSATIONS:
+            self._history.popitem(last=False)
+        return history
 
     async def async_process(
         self, user_input: conversation.ConversationInput
     ) -> conversation.ConversationResult:
-        """Send the utterance to the bridge and return the assistant reply."""
+        """Send the utterance plus prior context to the bridge."""
         url = self._entry.data[CONF_URL].rstrip("/") + CHAT_COMPLETIONS_PATH
-        api_key = self._entry.data.get(CONF_API_KEY) or ""
         model = self._entry.options.get(CONF_MODEL, DEFAULT_MODEL)
         timeout = self._entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+        system_prompt = self._entry.options.get(
+            CONF_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT
+        )
 
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+        conversation_id = user_input.conversation_id or ulid_util.ulid_now()
+        history = self._get_history(conversation_id)
+
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        if user_input.extra_system_prompt:
+            messages.append(
+                {"role": "system", "content": user_input.extra_system_prompt}
+            )
+        messages.extend(history)
+        messages.append({"role": "user", "content": user_input.text})
 
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": user_input.text}],
+            "messages": messages,
             "stream": False,
         }
 
@@ -87,7 +110,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
             async with session.post(
                 url,
                 json=payload,
-                headers=headers,
+                headers={"Content-Type": "application/json"},
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 resp.raise_for_status()
@@ -105,12 +128,16 @@ class HermesConversationEntity(conversation.ConversationEntity):
         except (KeyError, ValueError, TypeError) as err:
             _LOGGER.error("Malformed response from Hermes bridge: %s", err)
             reply = "Hermes returned a malformed response."
+        else:
+            history.append({"role": "user", "content": user_input.text})
+            history.append({"role": "assistant", "content": reply})
+            _trim_history(history)
 
         response = intent.IntentResponse(language=user_input.language)
         response.async_set_speech(reply)
         return conversation.ConversationResult(
             response=response,
-            conversation_id=user_input.conversation_id,
+            conversation_id=conversation_id,
         )
 
 
@@ -124,7 +151,18 @@ def _extract_reply(data: dict[str, Any]) -> str:
     if isinstance(content, str):
         return content.strip() or "(empty response)"
     if isinstance(content, list):
-        parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+        parts = [
+            p.get("text", "")
+            for p in content
+            if isinstance(p, dict) and p.get("type") == "text"
+        ]
         joined = "".join(parts).strip()
         return joined or "(empty response)"
     raise ValueError("unrecognized content shape")
+
+
+def _trim_history(history: list[dict[str, str]]) -> None:
+    """Cap history at MAX_HISTORY_EXCHANGES user/assistant pairs."""
+    max_msgs = MAX_HISTORY_EXCHANGES * 2
+    if len(history) > max_msgs:
+        del history[: len(history) - max_msgs]

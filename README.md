@@ -33,13 +33,18 @@ Settings → **Voice assistants** → pick your existing pipeline (the one alrea
 ## Options
 
 - **Bridge URL** — base URL of the bridge; the integration appends `/v1/chat/completions`.
-- **API key** — only required if the bridge sets `API_SERVER_KEY`.
-- **Model** — passed through in the OpenAI request body. The bridge currently ignores it (Hermes picks its own model), but it's preserved for forward compatibility.
+- **Model** — passed through in the OpenAI request body. Default `hermes-agent`.
 - **Timeout** — seconds to wait for a reply. Default 60s; raise this if Hermes runs heavy tool chains.
+- **System prompt** — prepended on every request. Default tells Hermes to keep replies short and that it can control HA.
+
+## Multi-turn behavior
+
+History is kept per HA `conversation_id`, capped at 10 user/assistant exchanges. When HA mints a new `conversation_id` (new session, timeout, explicit reset), history starts fresh. Up to 50 active conversations are tracked in an LRU cache; older ones are evicted automatically.
+
+This makes follow-ups like "turn them off" work after "what lights are on in the kitchen?".
 
 ## What it does not do (yet)
 
-- It does not send conversation history; each turn ships only the latest user utterance. Hermes maintains its own session memory across calls, so this is intentional for now.
 - It does not expose HA entities to the agent via the HA intent system. Hermes already controls HA via its own REST tools.
 - It does not stream. The bridge accepts `stream: false` and returns the full reply.
 

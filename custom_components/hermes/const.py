@@ -7,6 +7,7 @@ DOMAIN = "hermes"
 CONF_URL = "url"
 CONF_TIMEOUT = "timeout"
 CONF_MODEL = "model"
+CONF_API_KEY = "api_key"
 CONF_SYSTEM_PROMPT = "system_prompt"
 
 DEFAULT_URL = "http://192.168.1.100:8645"

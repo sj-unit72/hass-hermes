@@ -215,11 +215,12 @@ Copy `custom_components/hermes/` into `<HA config>/custom_components/hermes/` an
 | Field | Default | Notes |
 |---|---|---|
 | Bridge URL | `http://192.168.1.100:8645` | Replace with the IP of the machine running the bridge |
+| API key (optional) | (empty) | Only needed if the bridge requires auth. Sent as an `Authorization: Bearer` header on every request |
 | Model | `hermes-agent` | Sent in the OpenAI request body |
 | Timeout (s) | `60` | Raise to 90+ if Hermes runs heavy tool chains |
 | System prompt | (default supplied) | Editable later via the integration's options |
 
-Setup hits `/v1/models` on the bridge to verify reachability; if it can't connect you'll see "Could not reach the Hermes bridge."
+Setup hits `/v1/models` on the bridge to verify reachability; if it can't connect you'll see "Could not reach the Hermes bridge." If the bridge answers 401, setup shows "The bridge requires an API key, or the key was rejected." — fill in the API key field (on the Hermes host the key is `API_SERVER_KEY` in `~/.hermes/.env`).
 
 ### Wire it into your pipeline
 
@@ -241,6 +242,7 @@ Test the typed path first — it isolates the integration from voice-pipeline be
 Settings → Devices & services → Hermes Conversation → **Configure** to tweak:
 
 - **Model** — usually leave `hermes-agent`.
+- **API key** — only for bridges that require auth; leave empty otherwise.
 - **Timeout** — raise if you see "Hermes took too long to respond."
 - **System prompt** — change personality / output guidance.
 
@@ -257,6 +259,7 @@ History is kept per HA `conversation_id`, capped at 10 user/assistant exchanges.
 | "Hermes is not reachable right now." (spoken) | Bridge stopped after setup succeeded. Check bridge logs (`~/.hermes/logs/bridge.log`). |
 | "Hermes took too long to respond." | Raise the timeout in the integration's options. Default 60s; some tool chains need 90–120s. |
 | "Hermes returned a malformed response." | Bridge returned non-OpenAI JSON. Update the bridge to the latest version. |
+| Setup fails with "The bridge requires an API key..." | Bridge auth is on. Enter the bridge's `API_SERVER_KEY` (Hermes host: `~/.hermes/.env`) in the API key field, or update the bridge so auth is optional. |
 | Follow-ups don't work | Test typed first. If typed works but voice doesn't, the pipeline is closing the session between turns — file an issue. If neither works, `tail -f ~/.hermes/logs/bridge.log` and look for `openai query (N msgs)` — `N` should be > 1 on follow-up turns. |
 
 HA-side logs: Settings → System → **Logs** → filter on `custom_components.hermes`. Bridge-side logs: `tail -f ~/.hermes/logs/bridge.log` on the bridge host.

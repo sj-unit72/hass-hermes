@@ -6,6 +6,7 @@
         "description": "Point this at the Hermes voice bridge running on your network.",
         "data": {
           "url": "Bridge URL",
+          "api_key": "API key (optional)",
           "model": "Model name",
           "timeout": "Request timeout (seconds)",
           "system_prompt": "System prompt"
@@ -13,7 +14,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Could not reach the Hermes bridge at that URL."
+      "cannot_connect": "Could not reach the Hermes bridge at that URL.",
+      "invalid_auth": "The bridge requires an API key, or the key was rejected."
     },
     "abort": {
       "already_configured": "This Hermes bridge is already configured."
@@ -26,6 +28,7 @@
         "data": {
           "model": "Model name",
           "timeout": "Request timeout (seconds)",
+          "api_key": "API key (optional)",
           "system_prompt": "System prompt"
         }
       }

@@ -19,6 +19,7 @@ from homeassistant.util import ulid as ulid_util
 
 from .const import (
     CHAT_COMPLETIONS_PATH,
+    CONF_API_KEY,
     CONF_MODEL,
     CONF_SYSTEM_PROMPT,
     CONF_TIMEOUT,
@@ -83,6 +84,7 @@ class HermesConversationEntity(conversation.ConversationEntity):
         url = self._entry.data[CONF_URL].rstrip("/") + CHAT_COMPLETIONS_PATH
         model = self._entry.options.get(CONF_MODEL, DEFAULT_MODEL)
         timeout = self._entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+        api_key = self._entry.options.get(CONF_API_KEY, "")
         system_prompt = self._entry.options.get(
             CONF_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT
         )
@@ -104,13 +106,16 @@ class HermesConversationEntity(conversation.ConversationEntity):
             "stream": False,
         }
 
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         session = async_get_clientsession(self.hass)
         reply: str
         try:
             async with session.post(
                 url,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as resp:
                 resp.raise_for_status()
